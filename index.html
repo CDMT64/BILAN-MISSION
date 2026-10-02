@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bilan de mission – Vols</title>
+<meta name="description" content="Saisie des vols et synthèse de mission par aéronef">
+<meta name="theme-color" content="#3F4D22">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bilan vols">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --bg:#E9EDEF; --panel:#F8FAFA; --ink:#172026; --muted:#5B6870; --line:#C5CED3; --line-strong:#8E9BA2;
+  --day:#172026; --vi:#1E7A4A; --night:#B3261E;
+  --accent:#3F4D22; --accent-ink:#F4F6EC; --accent-soft:#DDE3CC; --warn:#9A5B00;
+  --row-hover:#EEF2F0;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#12171A; --panel:#1A2126; --ink:#E4EAEC; --muted:#93A1A8; --line:#2E3940; --line-strong:#4B5A62;
+    --day:#E4EAEC; --vi:#5CC98E; --night:#FF7A6E;
+    --accent:#A9BC6E; --accent-ink:#141A0A; --accent-soft:#2A331A; --warn:#F2B04C; --row-hover:#212A2F;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12171A; --panel:#1A2126; --ink:#E4EAEC; --muted:#93A1A8; --line:#2E3940; --line-strong:#4B5A62;
+  --day:#E4EAEC; --vi:#5CC98E; --night:#FF7A6E;
+  --accent:#A9BC6E; --accent-ink:#141A0A; --accent-soft:#2A331A; --warn:#F2B04C; --row-hover:#212A2F;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
+.cond{font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.wrap{max-width:1400px;margin:0 auto;padding:16px clamp(12px,3vw,28px) 40px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+.mission label{display:block;font-size:13px;color:var(--muted)}
+.mission input{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:clamp(26px,4vw,38px);line-height:1.1;border:0;border-bottom:1px dashed transparent;background:transparent;padding:0;width:min(560px,80vw)}
+.mission input:hover,.mission input:focus{border-bottom-color:var(--line-strong);outline:none}
+.meta{color:var(--muted);font-size:14px;margin-top:2px}
+.status{font-size:13px;color:var(--muted);text-align:right}
+.status b{color:var(--ink);font-weight:600}
+
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:46px;padding:0 18px;border-radius:6px;border:1.5px solid var(--line-strong);background:var(--panel);font-weight:600;font-size:16px}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);font-weight:500}
+.btn.ghost:hover{color:var(--ink)}
+.btn.danger{color:var(--night);border-color:var(--night);background:transparent}
+.btn svg{width:18px;height:18px}
+.spacer{flex:1}
+
+.tablebox{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:8px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;font-size:15px}
+thead th{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:600;font-size:15px;background:var(--bg);border-bottom:1.5px solid var(--line-strong);position:sticky;top:0}
+td.l,th.l{text-align:left}
+td.wrap-txt{white-space:normal;min-width:140px;max-width:260px;text-align:left;color:var(--muted);font-size:14px}
+tbody tr.flight{cursor:pointer}
+tbody tr.flight:hover{background:var(--row-hover)}
+.k-day{color:var(--day)} .k-vi{color:var(--vi)} .k-night{color:var(--night)}
+th.k-vi,th.k-night{color:inherit}
+thead th.k-vi{color:var(--vi)} thead th.k-night{color:var(--night)}
+td.zero{color:var(--line-strong)}
+td.tot,th.tot{font-weight:600;border-left:1.5px solid var(--line-strong)}
+.grp{border-left:1.5px solid var(--line-strong)}
+tr.sum td{font-weight:700;border-top:2px solid var(--ink);background:var(--accent-soft)}
+.typechip{display:inline-block;padding:1px 8px;border-radius:3px;background:var(--accent-soft);font-weight:600;font-size:14px}
+
+.empty{padding:56px 20px;text-align:center;color:var(--muted)}
+.empty strong{display:block;color:var(--ink);font-size:20px;margin-bottom:6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif}
+
+/* Dialogs */
+dialog{border:0;padding:0;background:var(--panel);color:var(--ink);border-radius:10px;width:min(820px,96vw);max-height:92vh;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog.wide{width:min(1300px,97vw)}
+dialog::backdrop{background:rgba(10,14,16,.55)}
+.dlg-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:2}
+.dlg-head h2{margin:0;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:26px;font-weight:700}
+.dlg-body{padding:16px 20px 8px;overflow:auto;max-height:calc(92vh - 140px)}
+.dlg-foot{display:flex;flex-wrap:wrap;gap:10px;padding:14px 20px;border-top:1px solid var(--line);background:var(--panel)}
+.x{width:44px;height:44px;border-radius:6px;border:0;background:transparent;font-size:26px;line-height:1;color:var(--muted)}
+
+fieldset{border:0;margin:0 0 18px;padding:0}
+legend{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:19px;padding:0;margin-bottom:8px}
+.row{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.field label{display:block;font-size:14px;color:var(--muted);margin-bottom:4px}
+.field input,.field select,.field textarea{width:100%;min-height:46px;padding:8px 12px;border:1.5px solid var(--line-strong);border-radius:6px;background:var(--bg);font-size:17px}
+.field textarea{min-height:70px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:44px;padding:0 16px;border-radius:22px;border:1.5px solid var(--line-strong);background:var(--bg);font-weight:600}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+.hours{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.hcell{border:1.5px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--bg)}
+.hcell label{display:block;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:17px}
+.hcell input{width:100%;border:0;background:transparent;font-size:24px;font-weight:600;padding:2px 0;font-variant-numeric:tabular-nums}
+.hcell input:focus{outline:none}
+.hcell:focus-within{border-color:var(--accent)}
+.hcell.bad,.stepper.bad{border-color:var(--night);border-width:2px}
+.req{color:var(--night)}
+.errbox{margin:0 20px;padding:10px 14px;border-left:4px solid var(--night);background:var(--bg);color:var(--night);font-weight:600;font-size:15px}
+.errbox:empty{display:none}
+.errbox ul{margin:0;padding-left:18px}
+.hcell.day label,.hcell.day input{color:var(--day)}
+.hcell.vi label,.hcell.vi input{color:var(--vi)}
+.hcell.night label,.hcell.night input{color:var(--night)}
+.hcell.auto{background:var(--accent-soft);border-color:var(--accent-soft)}
+.hcell.auto output{display:block;font-size:24px;font-weight:700;padding:2px 0}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 0}
+.warn{color:var(--warn);font-size:14px;margin:8px 0 0;min-height:1em}
+
+.appadd{margin-top:12px;max-width:320px}
+#appList{margin-top:10px}
+#appList:empty{display:none}
+.steppers{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.stepper{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1.5px solid var(--line);border-radius:6px;padding:4px 4px 4px 12px;background:var(--bg)}
+.stepper span{font-weight:600}
+.stepper .ctl{display:flex;align-items:center;gap:2px}
+.stepper button{width:40px;height:40px;border-radius:5px;border:0;background:var(--panel);font-size:22px;font-weight:600}
+.stepper output{min-width:26px;text-align:center;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
+.stepper.on{border-color:var(--accent)}
+
+.legend-colors{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);margin:10px 2px 0}
+.legend-colors i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:baseline}
+
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:6px;font-weight:600;transition:opacity .2s,transform .2s;pointer-events:none;z-index:50;max-width:90vw}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+
+#printArea{display:none}
+@media print{
+  @page{size:A4 landscape;margin:8mm}
+  body{background:#fff;color:#000}
+  body > *:not(#printArea){display:none !important}
+  #printArea{display:block}
+  #printArea h1{font-family:"Barlow Condensed",sans-serif;margin:0 0 4px;font-size:22px}
+  #printArea h2{font-size:15px;margin:14px 0 4px}
+  #printArea table{font-size:10px} #printArea th,#printArea td{padding:3px 4px;border:1px solid #888;font-size:10px}
+  #printArea .k-vi{color:#1E7A4A} #printArea .k-night{color:#B3261E}
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header class="top">
+    <div class="mission">
+      <label for="missionName">Mission</label>
+      <input id="missionName" placeholder="Nom de la mission" autocomplete="off">
+      <div class="meta" id="meta"></div>
+    </div>
+    <div class="status" id="status"></div>
+  </header>
+
+  <div class="actions">
+    <button class="btn primary" id="btnNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>Nouveau vol</button>
+    <button class="btn" id="btnPreview">Aperçu</button>
+    <button class="btn" id="btnSave">Sauver</button>
+    <button class="btn" id="btnPrint">Imprimer</button>
+    <span class="spacer"></span>
+    <button class="btn ghost" id="btnExport">Exporter sauvegarde</button>
+    <button class="btn ghost" id="btnImport">Importer</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+    <button class="btn ghost" id="btnReset">Nouvelle mission</button>
+  </div>
+
+  <div class="tablebox" id="flightsBox"></div>
+  <div class="legend-colors">
+    <span><i style="background:var(--day)"></i>Jour</span>
+    <span><i style="background:var(--vi)"></i>Vol aux instruments</span>
+    <span><i style="background:var(--night)"></i>Nuit, SIL, VTN</span>
+    <span>Touchez une ligne pour la modifier.</span>
+  </div>
+</div>
+
+<!-- Saisie d'un vol -->
+<dialog id="flightDlg" aria-labelledby="flightTitle">
+  <form method="dialog" id="flightForm" novalidate>
+    <div class="dlg-head"><h2 id="flightTitle">Nouveau vol</h2><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
+    <div class="errbox" id="formErrors" role="alert" style="margin-top:12px"></div>
+    <div class="dlg-body">
+      <fieldset>
+        <legend>Aéronef</legend>
+        <div class="chips" id="aircraftChips" role="group" aria-label="Aéronef"></div>
+        <div class="row" style="margin-top:12px">
+          <div class="field"><label for="f_immat">Immatriculation</label><input id="f_immat" autocomplete="off" autocapitalize="characters"></div>
+          <div class="field"><label for="f_code">Code ALAT</label><input id="f_code" autocomplete="off" autocapitalize="characters"></div>
+          <div class="field"><label for="f_date">Date</label><input id="f_date" type="date"></div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Type de vol</legend>
+        <div class="chips" id="typeChips" role="group" aria-label="Type de vol"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Heures de vol</legend>
+        <div class="hours" id="hoursGrid"></div>
+        <p class="hint">En heures décimales (ex. 1.7). Le total = jour + nuit.</p>
+        <p class="warn" id="hoursWarn" role="status"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Atterrissages et approches</legend>
+        <div class="steppers" id="steppers"></div>
+        <div class="appadd">
+          <div class="field"><label for="appSelect">Ajouter une approche</label>
+            <select id="appSelect"><option value="">Choisir dans la liste…</option></select></div>
+        </div>
+        <div class="steppers" id="appList"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Kéro et divers</legend>
+        <div class="row">
+          <div class="field"><label for="f_trp">Kéro (litres)</label><input id="f_trp" inputmode="numeric" autocomplete="off"></div>
+          <div class="field" style="grid-column:span 2"><label for="f_divers">Divers</label><textarea id="f_divers"></textarea></div>
+        </div>
+      </fieldset>
+    </div>
+    <div class="dlg-foot">
+      <button type="submit" class="btn primary" id="btnSaveFlight">Enregistrer le vol</button>
+      <button type="button" class="btn" data-close>Annuler</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn danger" id="btnDelete" hidden>Supprimer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Synthèse -->
+<dialog id="synthDlg" class="wide" aria-labelledby="synthTitle">
+  <div class="dlg-head"><h2 id="synthTitle">Synthèse par aéronef</h2><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
+  <div class="dlg-body"><div class="tablebox" id="synthBox"></div></div>
+  <div class="dlg-foot">
+    <button class="btn primary" id="btnPrint2">Imprimer / PDF</button>
+    <button class="btn" data-close>Fermer</button>
+  </div>
+</dialog>
+
+<!-- Confirmation -->
+<dialog id="confirmDlg" aria-labelledby="confirmTitle" style="width:min(460px,94vw)">
+  <div class="dlg-head"><h2 id="confirmTitle">Confirmer</h2></div>
+  <div class="dlg-body"><p id="confirmMsg" style="margin:0 0 8px"></p></div>
+  <div class="dlg-foot">
+    <button class="btn danger" id="confirmYes">Confirmer</button>
+    <button class="btn" id="confirmNo">Annuler</button>
+  </div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="printArea"></div>
+
+<script>
+(function(){
+"use strict";
+const AIRCRAFT=["Caracal","Tigre","Gazelle","Caïman","Cougar"];
+const TYPES=[{k:"MEP",l:"MEP / Retour"},{k:"ZONE",l:"Zone"},{k:"VT",l:"VT"},{k:"AUTRES",l:"Autres"}];
+const APPS=["RNP","GCA","SCA","ILS","VOR","ADF"];
+const HOURS=[
+  {k:"jour",l:"Jour",c:"day"},{k:"viCag",l:"VI CAG",c:"vi"},{k:"viCam",l:"VI CAM",c:"vi"},
+  {k:"nuit",l:"Nuit",c:"night"},{k:"sil",l:"SIL",c:"night"},{k:"vtn",l:"VTN",c:"night"}
+];
+const KEY="bilan-vols-v1";
+const $=s=>document.querySelector(s);
+const r1=x=>Math.round((x||0)*10)/10;
+const fmtH=x=>{x=r1(x);return x?x.toFixed(1):"–"};
+const fmtI=x=>x?String(Math.round(x)):"–";
+const num=v=>{if(v==null)return 0;const n=parseFloat(String(v).replace(",",".").trim());return isFinite(n)&&n>0?n:0};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const frDate=s=>{if(!s)return"";const [y,m,d]=s.split("-");return d+"/"+m+"/"+y.slice(2)};
+const typeLabel=k=>(TYPES.find(t=>t.k===k)||{}).l||k;
+const totalOf=f=>r1(num(f.jour)+num(f.nuit));
+const appText=(f,sep)=>APPS.filter(a=>f.app&&f.app[a]).map(a=>a+(sep||"×")+f.app[a]).join(", ");
+
+function blank(){return {mission:{name:""},flights:[],updatedAt:0}}
+let state=blank();
+try{const raw=localStorage.getItem(KEY);if(raw){const p=JSON.parse(raw);if(p&&Array.isArray(p.flights))state=p;}}catch(e){}
+
+/* ---------- Persistance : appareil + compte ---------- */
+let remoteRef=null, writing=false, pending=false, timer=null, lastSaved=null;
+function setStatus(){
+  const where=remoteRef?"sur ton compte":"sur cet appareil";
+  $("#status").innerHTML=lastSaved?`Enregistré ${where}<br><b>${lastSaved}</b>`:`Sauvegarde ${where}`;
+}
+function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+function persist(){
+  state.updatedAt=Date.now();
+  saveLocal();
+  const t=new Date();lastSaved="à "+String(t.getHours()).padStart(2,"0")+"h"+String(t.getMinutes()).padStart(2,"0");
+  setStatus();
+  if(remoteRef){clearTimeout(timer);timer=setTimeout(pushRemote,700);}
+}
+async function pushRemote(){
+  if(!remoteRef)return;
+  if(writing){pending=true;return}
+  writing=true;
+  try{await remoteRef.set(JSON.parse(JSON.stringify(state)));}
+  catch(e){
+    if(e&&e.code==="unavailable"){setTimeout(()=>{writing=false;pushRemote()},1500+Math.random()*1000);return}
+    if(e&&(e.code==="revoked"||e.code==="not_granted"||e.code==="invalid_argument")){remoteRef=null;setStatus()}
+  }
+  writing=false;
+  if(pending){pending=false;pushRemote()}
+}
+if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{})}
+
+/* ---------- Rendu du journal ---------- */
+function sorted(){return state.flights.slice().sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.created||0)-(b.created||0))}
+function cell(v,cls,isInt){const z=!r1(v);return `<td class="${cls||""}${z?" zero":""}">${isInt?fmtI(v):fmtH(v)}</td>`}
+
+function renderFlights(){
+  const box=$("#flightsBox");
+  const fl=sorted();
+  if(!fl.length){
+    box.innerHTML=`<div class="empty"><strong>Aucun vol saisi</strong>Ajoutez votre premier vol avec « Nouveau vol ».</div>`;
+    return;
+  }
+  let h=`<table><thead><tr>
+    <th class="l">Date</th><th class="l">Aéronef</th><th class="l">Immat.</th><th class="l">Code ALAT</th><th class="l">Type</th>
+    <th class="grp">Jour</th><th class="k-vi">VI CAG</th><th class="k-vi">VI CAM</th>
+    <th class="k-night grp">Nuit</th><th class="k-night">SIL</th><th class="k-night">VTN</th>
+    <th class="tot">Total</th><th>H méca</th><th class="grp">ATT</th><th>APP</th><th>Kéro (L)</th><th class="l">Divers</th>
+  </tr></thead><tbody>`;
+  const s={jour:0,viCag:0,viCam:0,nuit:0,sil:0,vtn:0,tot:0,hMeca:0,att:0,trp:0};
+  for(const f of fl){
+    HOURS.forEach(x=>s[x.k]+=num(f[x.k]));s.tot+=totalOf(f);s.hMeca+=num(f.hMeca);s.att+=num(f.att);s.trp+=num(f.trp);
+    h+=`<tr class="flight" data-id="${esc(f.id)}" tabindex="0">
+      <td class="l">${esc(frDate(f.date))}</td><td class="l"><b>${esc(f.aircraft)}</b></td><td class="l">${esc(f.immat)}</td><td class="l">${esc(f.code)}</td>
+      <td class="l"><span class="typechip">${esc(typeLabel(f.type))}</span></td>
+      ${cell(f.jour,"k-day grp")}${cell(f.viCag,"k-vi")}${cell(f.viCam,"k-vi")}
+      ${cell(f.nuit,"k-night grp")}${cell(f.sil,"k-night")}${cell(f.vtn,"k-night")}
+      ${cell(totalOf(f),"tot")}${cell(f.hMeca)}${cell(f.att,"grp",true)}
+      <td style="font-size:13px">${esc(appText(f))||'<span style="color:var(--line-strong)">–</span>'}</td>
+      ${cell(f.trp,"",true)}<td class="wrap-txt">${esc(f.divers)}</td></tr>`;
+  }
+  h+=`<tr class="sum"><td class="l" colspan="5">Total · ${fl.length} vol${fl.length>1?"s":""}</td>
+    ${cell(s.jour,"k-day grp")}${cell(s.viCag,"k-vi")}${cell(s.viCam,"k-vi")}
+    ${cell(s.nuit,"k-night grp")}${cell(s.sil,"k-night")}${cell(s.vtn,"k-night")}
+    ${cell(s.tot,"tot")}${cell(s.hMeca)}${cell(s.att,"grp",true)}<td></td>${cell(s.trp,"",true)}<td></td></tr>`;
+  h+=`</tbody></table>`;
+  box.innerHTML=h;
+}
+function renderMeta(){
+  const fl=sorted();
+  if(!fl.length){$("#meta").textContent="Aucun vol pour l'instant";return}
+  const d1=fl[0].date,d2=fl[fl.length-1].date;
+  const ac=new Set(fl.map(f=>f.aircraft+" "+f.immat)).size;
+  $("#meta").textContent=`${fl.length} vol${fl.length>1?"s":""}, ${ac} appareil${ac>1?"s":""}`+(d1?`, du ${frDate(d1)} au ${frDate(d2)}`:"");
+}
+function renderAll(){$("#missionName").value=state.mission.name||"";renderFlights();renderMeta();setStatus()}
+
+$("#flightsBox").addEventListener("click",e=>{const tr=e.target.closest("tr.flight");if(tr)openFlight(tr.dataset.id)});
+$("#flightsBox").addEventListener("keydown",e=>{if(e.key==="Enter"){const tr=e.target.closest("tr.flight");if(tr)openFlight(tr.dataset.id)}});
+$("#missionName").addEventListener("input",e=>{state.mission.name=e.target.value;persist()});
+
+/* ---------- Formulaire de vol ---------- */
+let editId=null, form={aircraft:"",type:""}, appCounts={}, attCount=0;
+$("#aircraftChips").innerHTML=AIRCRAFT.map(a=>`<button type="button" class="chip" data-v="${esc(a)}" aria-pressed="false">${esc(a)}</button>`).join("");
+$("#typeChips").innerHTML=TYPES.map(t=>`<button type="button" class="chip" data-v="${t.k}" aria-pressed="false">${esc(t.l)}</button>`).join("");
+$("#hoursGrid").innerHTML=HOURS.map(x=>`<div class="hcell ${x.c}"><label for="f_${x.k}">${x.l}</label><input id="f_${x.k}" inputmode="decimal" placeholder="0.0" autocomplete="off"></div>`).join("")
+  +`<div class="hcell auto"><label>Total</label><output id="f_total">0.0</output></div>`
+  +`<div class="hcell"><label for="f_hMeca">H méca <span class="req">*</span></label><input id="f_hMeca" inputmode="decimal" placeholder="0.0" autocomplete="off"></div>`;
+const stepHTML=x=>`<div class="stepper" data-k="${x.k}"><span>${x.l}</span><span class="ctl"><button type="button" data-d="-1" aria-label="Moins ${x.l}">−</button><output>0</output><button type="button" data-d="1" aria-label="Plus ${x.l}">+</button></span></div>`;
+$("#steppers").innerHTML=stepHTML({k:"ATT",l:"ATT"}).replace("<span>ATT</span>","<span>ATT <span class=\"req\">*</span></span>");
+$("#appSelect").insertAdjacentHTML("beforeend",APPS.map(a=>`<option value="${a}">${a}</option>`).join(""));
+$("#appSelect").addEventListener("change",e=>{const a=e.target.value;if(!a)return;appCounts[a]=(appCounts[a]||0)+1;e.target.value="";paintSteppers()});
+$("#appList").addEventListener("click",e=>{const b=e.target.closest("button[data-d]");if(!b)return;const k=b.closest(".stepper").dataset.k;appCounts[k]=Math.max(0,(appCounts[k]||0)+(+b.dataset.d));if(!appCounts[k])delete appCounts[k];paintSteppers()});
+
+function setChips(sel,val){document.querySelectorAll(sel+" .chip").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===val)))}
+$("#aircraftChips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;form.aircraft=b.dataset.v;setChips("#aircraftChips",form.aircraft);if(validated)showErrors(false)});
+$("#typeChips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;form.type=b.dataset.v;setChips("#typeChips",form.type);if(validated)showErrors(false)});
+$("#steppers").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-d]");if(!b)return;
+  const st=b.closest(".stepper"),k=st.dataset.k,d=+b.dataset.d;
+  if(k==="ATT")attCount=Math.max(0,attCount+d);else appCounts[k]=Math.max(0,(appCounts[k]||0)+d);
+  paintSteppers();
+});
+function paintSteppers(){
+  $("#appList").innerHTML=APPS.filter(a=>appCounts[a]).map(a=>stepHTML({k:a,l:"APP "+a})).join("");
+  document.querySelectorAll("#steppers .stepper, #appList .stepper").forEach(st=>{
+    const k=st.dataset.k,v=k==="ATT"?attCount:(appCounts[k]||0);
+    st.querySelector("output").textContent=v;st.classList.toggle("on",v>0);
+  });
+  if(typeof validated!=="undefined"&&validated)showErrors(false);
+}
+function hourErrors(){
+  const g=k=>r1(num($("#f_"+k).value));
+  const e=[];
+  const vi=r1(g("viCag")+g("viCam"));
+  if(vi>0&&g("jour")<vi)e.push({m:`Jour (${g("jour").toFixed(1)}) doit être au moins égal à VI CAG + VI CAM (${vi.toFixed(1)}).`,f:["jour","viCag","viCam"]});
+  if(g("sil")>0&&g("nuit")<g("sil"))e.push({m:`Nuit (${g("nuit").toFixed(1)}) doit être au moins égal au SIL (${g("sil").toFixed(1)}).`,f:["nuit","sil"]});
+  if(g("vtn")>0&&g("nuit")<g("vtn"))e.push({m:`Nuit (${g("nuit").toFixed(1)}) doit être au moins égal au VTN (${g("vtn").toFixed(1)}).`,f:["nuit","vtn"]});
+  return e;
+}
+function updateTotal(){
+  const g=k=>num($("#f_"+k).value);
+  $("#f_total").textContent=r1(g("jour")+g("nuit")).toFixed(1);
+  const e=hourErrors();
+  $("#hoursWarn").textContent=e.map(x=>x.m).join(" ");
+  document.querySelectorAll("#hoursGrid .hcell").forEach(c=>c.classList.remove("bad"));
+  e.forEach(x=>x.f.forEach(k=>$("#f_"+k).closest(".hcell").classList.add("bad")));
+  if(validated)showErrors(false);
+}
+let validated=false;
+function allErrors(){
+  const e=[];
+  if(!form.aircraft)e.push("Choisissez l'aéronef.");
+  if(!form.type)e.push("Choisissez le type de vol.");
+  if(!(r1(num($("#f_hMeca").value))>0))e.push("Saisissez les heures mécaniques.");
+  if(!(attCount>0))e.push("Saisissez le nombre d'atterrissages (ATT).");
+  hourErrors().forEach(x=>e.push(x.m));
+  return e;
+}
+function showErrors(scroll){
+  const e=allErrors();
+  $("#formErrors").innerHTML=e.length?"<ul>"+e.map(m=>"<li>"+esc(m)+"</li>").join("")+"</ul>":"";
+  $("#f_hMeca").closest(".hcell").classList.toggle("bad",!(r1(num($("#f_hMeca").value))>0));
+  const att=document.querySelector('#steppers .stepper[data-k="ATT"]');if(att)att.classList.toggle("bad",!(attCount>0));
+  if(scroll&&e.length)$("#flightDlg .dlg-body").scrollTop=0;
+  return e.length===0;
+}
+$("#hoursGrid").addEventListener("input",updateTotal);
+
+function openFlight(id){
+  editId=id||null;
+  const last=sorted().slice(-1)[0];
+  const f=id?state.flights.find(x=>x.id===id):null;
+  const src=f||{aircraft:last?last.aircraft:"",immat:last?last.immat:"",code:last?last.code:"",date:today(),type:""};
+  $("#flightTitle").textContent=f?"Modifier le vol":"Nouveau vol";
+  $("#btnDelete").hidden=!f;
+  form.aircraft=src.aircraft||"";form.type=src.type||"";
+  setChips("#aircraftChips",form.aircraft);setChips("#typeChips",form.type);
+  $("#f_immat").value=src.immat||"";$("#f_code").value=src.code||"";$("#f_date").value=src.date||today();
+  HOURS.forEach(x=>$("#f_"+x.k).value=f&&num(f[x.k])?String(r1(f[x.k])):"");
+  $("#f_hMeca").value=f&&num(f.hMeca)?String(r1(f.hMeca)):"";
+  $("#f_trp").value=f&&num(f.trp)?String(Math.round(f.trp)):"";
+  $("#f_divers").value=f?f.divers||"":"";
+  attCount=f?(f.att||0):0;appCounts=f?Object.assign({},f.app||{}):{};
+  validated=false;$("#formErrors").innerHTML="";
+  paintSteppers();updateTotal();
+  document.querySelectorAll("#flightDlg .bad").forEach(c=>c.classList.remove("bad"));updateTotal();
+  $("#flightDlg").showModal();
+  $("#flightDlg .dlg-body").scrollTop=0;
+}
+$("#flightForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  validated=true;
+  if(!showErrors(true)){toast("Vol incomplet : voir les points en rouge.");return}
+  const rec={
+    id:editId||("v"+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
+    created:editId?(state.flights.find(x=>x.id===editId)||{}).created||Date.now():Date.now(),
+    aircraft:form.aircraft,type:form.type,
+    immat:$("#f_immat").value.trim().toUpperCase(),code:$("#f_code").value.trim().toUpperCase(),date:$("#f_date").value||today(),
+    hMeca:r1(num($("#f_hMeca").value)),trp:Math.round(num($("#f_trp").value)),divers:$("#f_divers").value.trim(),
+    att:attCount,app:Object.fromEntries(APPS.filter(a=>appCounts[a]).map(a=>[a,appCounts[a]]))
+  };
+  HOURS.forEach(x=>rec[x.k]=r1(num($("#f_"+x.k).value)));
+  if(editId){const i=state.flights.findIndex(x=>x.id===editId);state.flights[i]=rec}else state.flights.push(rec);
+  persist();renderFlights();renderMeta();
+  $("#flightDlg").close();
+  toast(editId?"Vol modifié":"Vol enregistré");
+});
+$("#btnDelete").addEventListener("click",async()=>{
+  if(!editId)return;
+  if(!await ask("Supprimer ce vol ? Cette action est définitive.","Supprimer"))return;
+  state.flights=state.flights.filter(x=>x.id!==editId);
+  persist();renderFlights();renderMeta();$("#flightDlg").close();toast("Vol supprimé");
+});
+
+/* ---------- Synthèse ---------- */
+function synth(){
+  const groups=new Map();
+  const zero=()=>({j:0,n:0,vi:0,sil:0});
+  const mk=()=>({MEP:zero(),ZONE:zero(),VT:zero(),TOT:zero(),trp:0,meca:0});
+  const add=(o,f)=>{o.j+=num(f.jour);o.n+=num(f.nuit);o.vi+=num(f.viCag)+num(f.viCam);o.sil+=num(f.sil)};
+  const all=mk();
+  for(const f of sorted()){
+    const key=f.aircraft+"|"+(f.immat||"");
+    if(!groups.has(key))groups.set(key,Object.assign(mk(),{aircraft:f.aircraft,immat:f.immat||""}));
+    for(const g of [groups.get(key),all]){
+      if(g[f.type])add(g[f.type],f);
+      add(g.TOT,f);g.trp+=num(f.trp);g.meca+=num(f.hMeca);
+    }
+  }
+  const order=a=>AIRCRAFT.indexOf(a);
+  const rows=[...groups.values()].sort((a,b)=>order(a.aircraft)-order(b.aircraft)||a.immat.localeCompare(b.immat));
+  const vals=g=>[g.MEP.j,g.MEP.n,g.MEP.vi,g.MEP.sil,g.ZONE.j,g.ZONE.n,g.ZONE.vi,g.ZONE.sil,g.VT.j,g.TOT.j,g.TOT.n,g.TOT.vi,g.TOT.sil,g.TOT.j+g.TOT.n,g.trp,g.meca];
+  return {rows:rows.map(g=>({aircraft:g.aircraft,immat:g.immat,v:vals(g)})),total:vals(all)};
+}
+// kinds per value column (16 values after the two label columns)
+const SK=["day","night","vi","night","day","night","vi","night","day","day","night","vi","night","tot","int","h"];
+function synthHTML(){
+  const s=synth();
+  if(!s.rows.length)return `<div class="empty"><strong>Rien à synthétiser</strong>Saisissez au moins un vol.</div>`;
+  const vc=(x,i,row)=>{const k=SK[i];const grp=(i===0||i===4||i===8||i===9||i===14)?" grp":"";
+    const cls=(k==="day"?"k-day":k==="vi"?"k-vi":k==="night"?"k-night":k==="tot"?"tot":"")+grp;
+    return cell(x,cls,k==="int")};
+  let h=`<table><thead>
+   <tr><th class="l" rowspan="2">Aéronef</th><th class="l" rowspan="2">Immat.</th>
+   <th class="grp" colspan="4">MEP / Retour</th><th class="grp" colspan="4">Zone</th><th class="grp">VT</th>
+   <th class="grp" colspan="5">Total</th><th class="grp" rowspan="2">Kéro (L)</th><th rowspan="2">Total H méca</th></tr>
+   <tr>`+["J","N","VI","SIL","J","N","VI","SIL","J","J","N","VI","SIL","Tot."].map((t,i)=>{
+     const k=SK[i];const grp=(i===0||i===4||i===8||i===9)?" grp":"";
+     return `<th class="${k==="vi"?"k-vi":k==="night"?"k-night":k==="tot"?"tot":""}${grp}">${t}</th>`}).join("")+`</tr></thead><tbody>`;
+  for(const r of s.rows)h+=`<tr><td class="l"><b>${esc(r.aircraft)}</b></td><td class="l">${esc(r.immat)||"–"}</td>${r.v.map(vc).join("")}</tr>`;
+  h+=`<tr class="sum"><td class="l" colspan="2">Total mission</td>${s.total.map(vc).join("")}</tr></tbody></table>`;
+  return h;
+}
+$("#btnPreview").addEventListener("click",()=>{$("#synthBox").innerHTML=synthHTML();$("#synthDlg").showModal()});
+
+/* ---------- PDF ---------- */
+const RGB={day:[23,32,38],vi:[30,122,74],night:[179,38,30]};
+const pdfTxt=s=>String(s??"").replace(/[–—]/g,"-").replace(/×/g,"x");
+const pH=x=>{x=r1(x);return x?x.toFixed(1):"-"};
+const pI=x=>x?String(Math.round(x)):"-";
+function buildPdf(height){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:"mm",format:[297,height],orientation:height>297?"p":"l"});
+  const W=297,M=8;
+  const name=state.mission.name||"Mission";
+  const fl=sorted();
+  doc.setFont("helvetica","bold");doc.setFontSize(16);doc.text(pdfTxt("Bilan de mission - "+name),M,14);
+  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(90);
+  const d1=fl[0]&&fl[0].date,d2=fl.length&&fl[fl.length-1].date;
+  doc.text(pdfTxt(`${fl.length} vol(s)`+(d1?`, du ${frDate(d1)} au ${frDate(d2)}`:"")+`  |  Édité le ${frDate(today())}`),M,19.5);
+  doc.setTextColor(0);
+  const s=synth();
+  const base={theme:"grid",margin:{left:M,right:M},styles:{fontSize:8,halign:"center",cellPadding:1.4,lineColor:[150,160,165],lineWidth:.15,textColor:[23,32,38]},
+    headStyles:{fillColor:[221,227,204],textColor:[23,32,38],fontStyle:"bold",halign:"center",valign:"middle"},pageBreak:"avoid",rowPageBreak:"avoid"};
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("Synthèse par aéronef",M,27);
+  const sk=["l","l"].concat(SK);
+  doc.autoTable(Object.assign({},base,{startY:29,
+    head:[[{content:"Aéronef",rowSpan:2},{content:"Immat.",rowSpan:2},{content:"MEP / Retour",colSpan:4},{content:"Zone",colSpan:4},{content:"VT",colSpan:1},{content:"Total",colSpan:5},{content:"Kéro (L)",rowSpan:2},{content:"Total H méca",rowSpan:2}],
+      ["J","N","VI","SIL","J","N","VI","SIL","J","J","N","VI","SIL","Tot."]],
+    body:s.rows.map(r=>[pdfTxt(r.aircraft),pdfTxt(r.immat)||"-"].concat(r.v.map((x,i)=>SK[i]==="int"?pI(x):pH(x))))
+      .concat([[{content:"Total mission",colSpan:2,styles:{halign:"left"}}].concat(s.total.map((x,i)=>SK[i]==="int"?pI(x):pH(x)))]),
+    columnStyles:{0:{halign:"left",fontStyle:"bold"},1:{halign:"left"}},
+    didParseCell:d=>{
+      if(d.section==="body"&&d.row.index===s.rows.length){d.cell.styles.fontStyle="bold";d.cell.styles.fillColor=[238,241,232]}
+      const isSub=d.section==="head"&&d.row.index===1;
+      if(d.section==="body"||isSub){const k=isSub?SK[d.column.index-2]:sk[d.column.index];if(RGB[k])d.cell.styles.textColor=RGB[k];if(k==="tot")d.cell.styles.fontStyle="bold"}
+    }}));
+  let y=doc.lastAutoTable.finalY+9;
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("Détail des vols",M,y);
+  const DK=[null,null,null,null,null,"day","vi","vi","night","night","night","tot",null,null,null,null,null];
+  doc.autoTable(Object.assign({},base,{startY:y+2,styles:Object.assign({},base.styles,{fontSize:7.5}),
+    head:[["Date","Aéronef","Immat.","Code ALAT","Type","Jour","VI CAG","VI CAM","Nuit","SIL","VTN","Total","H méca","ATT","APP","Kéro (L)","Divers"]],
+    body:fl.map(f=>[frDate(f.date),pdfTxt(f.aircraft),pdfTxt(f.immat),pdfTxt(f.code),pdfTxt(typeLabel(f.type)),pH(f.jour),pH(f.viCag),pH(f.viCam),pH(f.nuit),pH(f.sil),pH(f.vtn),pH(totalOf(f)),pH(f.hMeca),pI(f.att),pdfTxt(appText(f,"x"))||"-",pI(f.trp),pdfTxt(f.divers)]),
+    columnStyles:{1:{halign:"left"},2:{halign:"left"},4:{halign:"left"},14:{cellWidth:28},16:{halign:"left",cellWidth:48}},
+    didParseCell:d=>{const k=DK[d.column.index];if(d.section==="body"&&RGB[k])d.cell.styles.textColor=RGB[k];if(d.section==="body"&&k==="tot")d.cell.styles.fontStyle="bold";
+      if(d.section==="head"&&RGB[k]&&k!=="day")d.cell.styles.textColor=RGB[k]}}));
+  return {doc,end:doc.lastAutoTable.finalY};
+}
+async function exportPdf(){
+  if(!state.flights.length){toast("Aucun vol à imprimer.");return}
+  const fname="Bilan_"+(state.mission.name||"mission").replace(/[^\wÀ-ÿ-]+/g,"_").slice(0,60)+"_"+today()+".pdf";
+  if(window.jspdf&&window.jspdf.jsPDF){
+    try{
+      const probe=buildPdf(4000);
+      const h=Math.max(210,Math.ceil(probe.end+10));
+      const {doc}=buildPdf(h);
+      const isIOS=/iP(ad|hone|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+      if(isIOS&&navigator.canShare){
+        const file=new File([doc.output("blob")],fname,{type:"application/pdf"});
+        if(navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:fname})}catch(e){}return}
+      }
+      try{doc.save(fname);return}catch(e){}
+    }catch(e){console.error(e)}
+  }
+  printFallback();
+}
+function printFallback(){
+  const fl=sorted();
+  $("#printArea").innerHTML=`<h1>Bilan de mission – ${esc(state.mission.name||"Mission")}</h1><div>${esc($("#meta").textContent)}</div><h2>Synthèse par aéronef</h2>${synthHTML()}<h2>Détail des vols</h2>`+$("#flightsBox").innerHTML;
+  try{window.print()}catch(e){toast("Impression indisponible ici.")}
+}
+$("#btnPrint").addEventListener("click",exportPdf);
+$("#btnPrint2").addEventListener("click",exportPdf);
+
+/* ---------- Divers ---------- */
+$("#btnNew").addEventListener("click",()=>openFlight(null));
+$("#btnSave").addEventListener("click",()=>{persist();toast("Enregistré sur cet appareil")});
+$("#btnExport").addEventListener("click",async()=>{
+  const name="Sauvegarde_"+(state.mission.name||"mission").replace(/[^\wÀ-ÿ-]+/g,"_").slice(0,60)+"_"+today()+".json";
+  const blob=new Blob([JSON.stringify(state,null,1)],{type:"application/json"});
+  const file=new File([blob],name,{type:"application/json"});
+  if(navigator.canShare&&navigator.canShare({files:[file]})&&/Android|iP(ad|hone)/.test(navigator.userAgent)){try{await navigator.share({files:[file],title:name})}catch(e){}return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+});
+$("#btnImport").addEventListener("click",()=>$("#importFile").click());
+$("#importFile").addEventListener("change",async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(!d||!Array.isArray(d.flights))throw 0;
+    if(!await ask(`Remplacer la mission actuelle par « ${d.mission&&d.mission.name||"sans nom"} » (${d.flights.length} vols) ?`,"Importer"))return;
+    state={mission:{name:(d.mission&&d.mission.name)||""},flights:d.flights,updatedAt:0};persist();renderAll();toast("Sauvegarde importée");
+  }catch(err){toast("Fichier de sauvegarde invalide.")}
+});
+$("#btnReset").addEventListener("click",async()=>{
+  if(!await ask("Effacer tous les vols et commencer une nouvelle mission ? Pensez à imprimer le bilan avant.","Effacer"))return;
+  state=blank();persist();renderAll();toast("Nouvelle mission prête");
+});
+document.querySelectorAll("[data-close]").forEach(b=>b.addEventListener("click",()=>b.closest("dialog").close()));
+document.querySelectorAll("dialog").forEach(d=>d.addEventListener("click",e=>{if(e.target===d&&d.id!=="confirmDlg")d.close()}));
+
+function ask(msg,yes){
+  return new Promise(res=>{
+    const d=$("#confirmDlg");$("#confirmMsg").textContent=msg;$("#confirmYes").textContent=yes||"Confirmer";
+    const done=v=>{d.close();$("#confirmYes").onclick=$("#confirmNo").onclick=null;res(v)};
+    $("#confirmYes").onclick=()=>done(true);$("#confirmNo").onclick=()=>done(false);
+    d.oncancel=()=>done(false);d.showModal();
+  });
+}
+let tt;function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2200)}
+
+renderAll();
+if("serviceWorker" in navigator&&location.protocol!=="file:"){window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
+})();
+</script>
+</body>
+</html>

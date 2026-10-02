@@ -1,0 +1,17 @@
+{
+  "name": "Bilan de mission – Vols",
+  "short_name": "Bilan vols",
+  "description": "Saisie des vols hélicoptère et synthèse de mission par aéronef",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#E9EDEF",
+  "theme_color": "#3F4D22",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
