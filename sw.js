@@ -1,6 +1,6 @@
 // Bilan de mission – service worker (fonctionnement hors ligne)
 // Augmentez VERSION à chaque mise à jour publiée pour forcer le rafraîchissement.
-const VERSION = "v1.0.0";
+const VERSION = "v1.1.0";
 const CACHE = "bilan-vols-" + VERSION;
 const CORE = [
   "./",
@@ -9,6 +9,9 @@ const CORE = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png",
+  "./icons/icon-maskable-512.png",
+  "./icons/favicon-32.png",
+  "./favicon.ico",
   "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"
 ];
