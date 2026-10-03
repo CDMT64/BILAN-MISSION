@@ -11,7 +11,8 @@ Fonctionne sur tablette Android, iPad et ordinateur, **y compris hors ligne** un
 | `index.html` | L'application (tout le code est dedans) |
 | `manifest.webmanifest` | Nom, couleurs et icônes pour l'installation |
 | `sw.js` | Service worker : mise en cache pour le hors ligne |
-| `icons/` | Icônes de l'application |
+| `icons/` | Icônes : Android (192, 512, maskable), Apple (`apple-touch-icon.png`, 180 px), ordinateur (favicons 16 et 32 px) |
+| `favicon.ico` | Icône d'onglet pour les navigateurs d'ordinateur |
 | `.nojekyll` | Indique à GitHub Pages de servir les fichiers tels quels |
 
 ## Mise en ligne sur GitHub Pages
@@ -41,9 +42,13 @@ Les vols sont enregistrés **localement dans l'appareil** (stockage du navigateu
 
 ## Mettre à jour l'application
 
-1. Remplacez `index.html` (et les autres fichiers modifiés) dans le dépôt.
-2. Dans `sw.js`, augmentez `VERSION` (par ex. `v1.0.0` → `v1.0.1`).
-3. Sur l'appareil, l'application récupère la nouvelle version à la prochaine ouverture avec réseau (la fermer puis la rouvrir si besoin). Les vols saisis sont conservés.
+Remplacez simplement les fichiers modifiés dans le dépôt GitHub. Il n'y a **aucun numéro de version à changer** et **rien à désinstaller** :
+
+- le service worker fonctionne en « réseau d'abord » : avec du réseau, l'appli charge toujours la dernière version publiée ; hors ligne, elle utilise la dernière copie enregistrée ;
+- l'identité de l'appli est fixée dans le manifeste (`"id"`), donc l'installation existante reste la même appli après une mise à jour ;
+- quand une nouvelle version arrive, l'appli se recharge d'elle-même une fois. Les vols saisis sont conservés.
+
+GitHub Pages peut mettre jusqu'à une dizaine de minutes à diffuser une modification.
 
 ## Règles de saisie appliquées
 
