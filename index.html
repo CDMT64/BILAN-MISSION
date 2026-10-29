@@ -403,7 +403,8 @@ function hourErrors(){
   const g=k=>r1(num($("#f_"+k).value));
   const e=[];
   const vi=r1(g("viCag")+g("viCam"));
-  if(vi>0&&g("jour")<vi)e.push({m:`Jour (${g("jour").toFixed(1)}) doit être au moins égal à VI CAG + VI CAM (${vi.toFixed(1)}).`,f:["jour","viCag","viCam"]});
+  const jn=r1(g("jour")+g("nuit"));
+  if(vi>0&&jn<vi)e.push({m:`Jour + Nuit (${jn.toFixed(1)}) doit être au moins égal à VI CAG + VI CAM (${vi.toFixed(1)}).`,f:["jour","nuit","viCag","viCam"]});
   if(g("sil")>0&&g("nuit")<g("sil"))e.push({m:`Nuit (${g("nuit").toFixed(1)}) doit être au moins égal au SIL (${g("sil").toFixed(1)}).`,f:["nuit","sil"]});
   if(g("vtn")>0&&g("nuit")<g("vtn"))e.push({m:`Nuit (${g("nuit").toFixed(1)}) doit être au moins égal au VTN (${g("vtn").toFixed(1)}).`,f:["nuit","vtn"]});
   return e;
