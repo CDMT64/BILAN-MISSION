@@ -139,6 +139,12 @@ legend{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;
 .stepper output{min-width:26px;text-align:center;font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
 .stepper.on{border-color:var(--accent)}
 
+.rp-title{text-align:center;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:clamp(28px,4.5vw,42px);line-height:1.1;margin:6px 0 2px}
+.rp-dates{text-align:center;font-size:16px;font-weight:400;color:var(--muted);margin:0 0 20px}
+.rp-h{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:19px;margin:22px 0 8px}
+.sigwrap{overflow-x:auto;margin:26px 0 6px}
+.sig{display:grid;grid-template-columns:10cm 10cm;width:20cm;margin:0 auto;border-top:1.5px solid var(--ink);border-left:1.5px solid var(--ink)}
+.sig div{height:5cm;border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);padding:6px 4px 0;text-align:center;font-weight:700;font-size:11px;letter-spacing:.02em;white-space:nowrap;overflow:hidden}
 .legend-colors{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);margin:10px 2px 0}
 .legend-colors i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:baseline}
 
@@ -154,6 +160,10 @@ legend{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;
   #printArea{display:block}
   #printArea h1{font-family:"Barlow Condensed",sans-serif;margin:0 0 4px;font-size:22px}
   #printArea h2{font-size:15px;margin:14px 0 4px}
+  #printArea .rp-title{font-size:26px;color:#000} #printArea .rp-dates{color:#000;font-size:13px;margin-bottom:10px}
+  #printArea .rp-h{font-size:14px;margin:12px 0 4px}
+  #printArea .sig,#printArea .sig div{border-color:#000} #printArea .sig div{font-size:9pt}
+  #printArea .sigwrap{break-inside:avoid;page-break-inside:avoid}
   #printArea table{font-size:10px} #printArea th,#printArea td{padding:3px 4px;border:1px solid #888;font-size:10px}
   #printArea .k-vi{color:#1E7A4A} #printArea .k-night{color:#B3261E}
 }
@@ -244,8 +254,8 @@ legend{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;
 
 <!-- Synthèse -->
 <dialog id="synthDlg" class="wide" aria-labelledby="synthTitle">
-  <div class="dlg-head"><h2 id="synthTitle">Synthèse par aéronef</h2><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
-  <div class="dlg-body"><div class="tablebox" id="synthBox"></div></div>
+  <div class="dlg-head"><h2 id="synthTitle">Aperçu</h2><button type="button" class="x" data-close aria-label="Fermer">×</button></div>
+  <div class="dlg-body"><div id="synthBox"></div></div>
   <div class="dlg-foot">
     <button class="btn primary" id="btnPrint2">Imprimer / PDF</button>
     <button class="btn" data-close>Fermer</button>
@@ -523,7 +533,43 @@ function synthHTML(){
   h+=`<tr class="sum"><td class="l" colspan="2">Total mission</td>${s.total.map(vc).join("")}</tr></tbody></table>`;
   return h;
 }
-$("#btnPreview").addEventListener("click",()=>{$("#synthBox").innerHTML=synthHTML();$("#synthDlg").showModal()});
+/* Synthèse par code ALAT */
+const CK=["day","vi","vi","night","night","night","tot","h","int"];
+function synthCode(){
+  const m=new Map();
+  const z=()=>[0,0,0,0,0,0,0,0,0];
+  const add=(v,f)=>{v[0]+=num(f.jour);v[1]+=num(f.viCag);v[2]+=num(f.viCam);v[3]+=num(f.nuit);v[4]+=num(f.sil);v[5]+=num(f.vtn);v[6]+=totalOf(f);v[7]+=num(f.hMeca);v[8]+=num(f.att)};
+  const all=z();
+  for(const f of sorted()){const k=f.code||"";if(!m.has(k))m.set(k,z());add(m.get(k),f);add(all,f)}
+  const rows=[...m.entries()].sort((a,b)=>(a[0]===""?1:0)-(b[0]===""?1:0)||a[0].localeCompare(b[0])).map(([code,v])=>({code,v}));
+  return {rows,total:all};
+}
+function codeHTML(){
+  const s=synthCode();
+  const vc=(x,i)=>{const k=CK[i];const grp=(i===0||i===3||i===6||i===8)?" grp":"";
+    return cell(x,(k==="day"?"k-day":k==="vi"?"k-vi":k==="night"?"k-night":k==="tot"?"tot":"")+grp,k==="int")};
+  let h=`<table><thead><tr><th class="l">Code ALAT</th><th class="grp">Jour</th><th class="k-vi">VI CAG</th><th class="k-vi">VI CAM</th><th class="k-night grp">Nuit</th><th class="k-night">SIL</th><th class="k-night">VTN</th><th class="tot">Total</th><th>H méca</th><th class="grp">ATT</th></tr></thead><tbody>`;
+  for(const r of s.rows)h+=`<tr><td class="l"><b>${esc(r.code)||"Sans code"}</b></td>${r.v.map(vc).join("")}</tr>`;
+  h+=`<tr class="sum"><td class="l">Total mission</td>${s.total.map(vc).join("")}</tr></tbody></table>`;
+  return h;
+}
+const SIGS=["COMMANDANT D'UNITÉ","OFFICIER SÉCURITÉ DES VOLS","OFFICIER OPÉRATIONS","CHEF DE CORPS"];
+const longDate=d=>{if(!d)return"";const [y,m,j]=d.split("-");return j+"/"+m+"/"+y};
+function missionDates(){
+  const fl=sorted();if(!fl.length)return"";
+  const d1=fl[0].date,d2=fl[fl.length-1].date;
+  if(!d1)return"";
+  return d1===d2?"Le "+longDate(d1):"Du "+longDate(d1)+" au "+longDate(d2);
+}
+function reportHTML(){
+  if(!state.flights.length)return `<div class="empty"><strong>Rien à synthétiser</strong>Saisissez au moins un vol.</div>`;
+  return `<div class="rp-title">${esc(state.mission.name||"Mission")}</div>
+    <div class="rp-dates">${esc(missionDates())}</div>
+    <div class="rp-h">Synthèse par aéronef</div><div class="tablebox">${synthHTML()}</div>
+    <div class="rp-h">Synthèse par code ALAT</div><div class="tablebox">${codeHTML()}</div>
+    <div class="sigwrap"><div class="sig">${SIGS.map(t=>`<div>${esc(t)}</div>`).join("")}</div></div>`;
+}
+$("#btnPreview").addEventListener("click",()=>{$("#synthBox").innerHTML=reportHTML();$("#synthDlg").showModal()});
 
 /* ---------- PDF ---------- */
 const RGB={day:[23,32,38],vi:[30,122,74],night:[179,38,30]};
@@ -536,17 +582,16 @@ function buildPdf(height){
   const W=297,M=8;
   const name=state.mission.name||"Mission";
   const fl=sorted();
-  doc.setFont("helvetica","bold");doc.setFontSize(16);doc.text(pdfTxt("Bilan de mission - "+name),M,14);
-  doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(90);
-  const d1=fl[0]&&fl[0].date,d2=fl.length&&fl[fl.length-1].date;
-  doc.text(pdfTxt(`${fl.length} vol(s)`+(d1?`, du ${frDate(d1)} au ${frDate(d2)}`:"")+`  |  Édité le ${frDate(today())}`),M,19.5);
-  doc.setTextColor(0);
+  doc.setFont("helvetica","bold");doc.setFontSize(22);
+  doc.text(doc.splitTextToSize(pdfTxt(name),W-2*M)[0],W/2,17,{align:"center"});
+  doc.setFont("helvetica","normal");doc.setFontSize(11);
+  doc.text(pdfTxt(missionDates()),W/2,24,{align:"center"});
   const s=synth();
   const base={theme:"grid",margin:{left:M,right:M},styles:{fontSize:8,halign:"center",cellPadding:1.4,lineColor:[150,160,165],lineWidth:.15,textColor:[23,32,38]},
     headStyles:{fillColor:[221,227,204],textColor:[23,32,38],fontStyle:"bold",halign:"center",valign:"middle"},pageBreak:"avoid",rowPageBreak:"avoid"};
-  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("Synthèse par aéronef",M,27);
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("Synthèse par aéronef",M,34);
   const sk=["l","l"].concat(SK);
-  doc.autoTable(Object.assign({},base,{startY:29,
+  doc.autoTable(Object.assign({},base,{startY:36,
     head:[[{content:"Aéronef",rowSpan:2},{content:"Immat.",rowSpan:2},{content:"MEP / Retour",colSpan:4},{content:"Zone",colSpan:4},{content:"VT",colSpan:1},{content:"Total",colSpan:5},{content:"Kéro (L)",rowSpan:2},{content:"Total H méca",rowSpan:2}],
       ["J","N","VI","SIL","J","N","VI","SIL","J","J","N","VI","SIL","Tot."]],
     body:s.rows.map(r=>[pdfTxt(r.aircraft),pdfTxt(r.immat)||"-"].concat(r.v.map((x,i)=>SK[i]==="int"?pI(x):pH(x))))
@@ -558,15 +603,30 @@ function buildPdf(height){
       if(d.section==="body"||isSub){const k=isSub?SK[d.column.index-2]:sk[d.column.index];if(RGB[k])d.cell.styles.textColor=RGB[k];if(k==="tot")d.cell.styles.fontStyle="bold"}
     }}));
   let y=doc.lastAutoTable.finalY+9;
-  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("Détail des vols",M,y);
-  const DK=[null,null,null,null,null,"day","vi","vi","night","night","night","tot",null,null,null,null,null];
-  doc.autoTable(Object.assign({},base,{startY:y+2,styles:Object.assign({},base.styles,{fontSize:7.5}),
-    head:[["Date","Aéronef","Immat.","Code ALAT","Type","Jour","VI CAG","VI CAM","Nuit","SIL","VTN","Total","H méca","ATT","APP","Kéro (L)","Divers"]],
-    body:fl.map(f=>[frDate(f.date),pdfTxt(f.aircraft),pdfTxt(f.immat),pdfTxt(f.code),pdfTxt(typeLabel(f.type)),pH(f.jour),pH(f.viCag),pH(f.viCam),pH(f.nuit),pH(f.sil),pH(f.vtn),pH(totalOf(f)),pH(f.hMeca),pI(f.att),pdfTxt(appText(f,"x"))||"-",pI(f.trp),pdfTxt(f.divers)]),
-    columnStyles:{1:{halign:"left"},2:{halign:"left"},4:{halign:"left"},14:{cellWidth:28},16:{halign:"left",cellWidth:48}},
-    didParseCell:d=>{const k=DK[d.column.index];if(d.section==="body"&&RGB[k])d.cell.styles.textColor=RGB[k];if(d.section==="body"&&k==="tot")d.cell.styles.fontStyle="bold";
-      if(d.section==="head"&&RGB[k]&&k!=="day")d.cell.styles.textColor=RGB[k]}}));
-  return {doc,end:doc.lastAutoTable.finalY};
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("Synthèse par code ALAT",M,y);
+  const sc=synthCode();
+  const fmtC=v=>v.map((x,i)=>CK[i]==="int"?pI(x):pH(x));
+  doc.autoTable(Object.assign({},base,{startY:y+2,
+    head:[["Code ALAT","Jour","VI CAG","VI CAM","Nuit","SIL","VTN","Total","H méca","ATT"]],
+    body:sc.rows.map(r=>[pdfTxt(r.code)||"Sans code"].concat(fmtC(r.v))).concat([["Total mission"].concat(fmtC(sc.total))]),
+    columnStyles:{0:{halign:"left",fontStyle:"bold"}},
+    didParseCell:d=>{
+      const k=CK[d.column.index-1];
+      if(d.section==="body"&&d.row.index===sc.rows.length){d.cell.styles.fontStyle="bold";d.cell.styles.fillColor=[238,241,232]}
+      if(RGB[k]&&(d.section==="body"||k!=="day"))d.cell.styles.textColor=RGB[k];
+      if(d.section==="body"&&k==="tot")d.cell.styles.fontStyle="bold";
+    }}));
+  // Cadre signatures : 2 x 2 cases de 10 cm x 5 cm
+  const CW=100,CH=50,sx=(W-2*CW)/2,sy=doc.lastAutoTable.finalY+12;
+  doc.setDrawColor(0);doc.setLineWidth(.35);doc.setTextColor(0);
+  doc.setFont("helvetica","bold");doc.setFontSize(8);
+  SIGS.forEach((t,i)=>{
+    const x=sx+(i%2)*CW,yy=sy+Math.floor(i/2)*CH;
+    doc.rect(x,yy,CW,CH);
+    doc.text(t,x+CW/2,yy+4.5,{align:"center",maxWidth:CW-2});
+  });
+  doc.setTextColor(23,32,38);
+  return {doc,end:sy+2*CH};
 }
 async function exportPdf(){
   if(!state.flights.length){toast("Aucun vol à imprimer.");return}
@@ -588,7 +648,7 @@ async function exportPdf(){
 }
 function printFallback(){
   const fl=sorted();
-  $("#printArea").innerHTML=`<h1>Bilan de mission – ${esc(state.mission.name||"Mission")}</h1><div>${esc($("#meta").textContent)}</div><h2>Synthèse par aéronef</h2>${synthHTML()}<h2>Détail des vols</h2>`+$("#flightsBox").innerHTML;
+  $("#printArea").innerHTML=reportHTML();
   try{window.print()}catch(e){toast("Impression indisponible ici.")}
 }
 $("#btnPrint").addEventListener("click",exportPdf);
