@@ -145,6 +145,12 @@ legend{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;
 .sigwrap{overflow-x:auto;margin:26px 0 6px}
 .sig{display:grid;grid-template-columns:10cm 10cm;width:20cm;margin:0 auto;border-top:1.5px solid var(--ink);border-left:1.5px solid var(--ink)}
 .sig div{height:5cm;border-right:1.5px solid var(--ink);border-bottom:1.5px solid var(--ink);padding:6px 4px 0;text-align:center;font-weight:700;font-size:11px;letter-spacing:.02em;white-space:nowrap;overflow:hidden}
+.obs{border:1.5px solid var(--ink);margin:22px 0 0;padding:6px 10px 8px}
+.obs:focus-within{border-color:var(--accent)}
+.obs label,.obs-l{display:block;font-weight:700;font-size:11px;letter-spacing:.02em;margin-bottom:4px}
+.obs textarea{display:block;width:100%;min-height:100px;border:0;background:transparent;resize:vertical;font-size:15px;line-height:1.4;padding:2px 0}
+.obs textarea:focus{outline:none}
+.obs-t{white-space:pre-wrap;min-height:1.5cm;font-size:10pt;line-height:1.3}
 .legend-colors{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);margin:10px 2px 0}
 .legend-colors i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:baseline}
 
@@ -163,7 +169,10 @@ legend{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;
   #printArea .rp-title{font-size:26px;color:#000} #printArea .rp-dates{color:#000;font-size:13px;margin-bottom:10px}
   #printArea .rp-h{font-size:14px;margin:12px 0 4px}
   #printArea .sig,#printArea .sig div{border-color:#000} #printArea .sig div{font-size:9pt}
-  #printArea .sigwrap{break-inside:avoid;page-break-inside:avoid}
+  #printArea .sigwrap{break-inside:avoid;page-break-inside:avoid;margin-top:5mm}
+  #printArea .rp-title{font-size:20px;margin:0} #printArea .rp-dates{margin-bottom:4px}
+  #printArea .rp-h{margin:4px 0 2px} #printArea th,#printArea td{padding:1px 3px;font-size:8px}
+  #printArea .obs{margin-top:4mm;padding:3px 8px;border-color:#000} #printArea .obs-l{font-size:9pt}
   #printArea table{font-size:10px} #printArea th,#printArea td{padding:3px 4px;border:1px solid #888;font-size:10px}
   #printArea .k-vi{color:#1E7A4A} #printArea .k-night{color:#B3261E}
 }
@@ -561,37 +570,47 @@ function missionDates(){
   if(!d1)return"";
   return d1===d2?"Le "+longDate(d1):"Du "+longDate(d1)+" au "+longDate(d2);
 }
-function reportHTML(){
+function reportHTML(forPrint){
   if(!state.flights.length)return `<div class="empty"><strong>Rien à synthétiser</strong>Saisissez au moins un vol.</div>`;
+  const obs=state.mission.obs||"";
+  const obsBox=forPrint
+    ?`<div class="obs"><div class="obs-l">OBSERVATIONS</div><div class="obs-t">${esc(obs)}</div></div>`
+    :`<div class="obs"><label for="obsInput">OBSERVATIONS</label><textarea id="obsInput" placeholder="Texte libre, imprimé avec le bilan">${esc(obs)}</textarea></div>`;
   return `<div class="rp-title">${esc(state.mission.name||"Mission")}</div>
     <div class="rp-dates">${esc(missionDates())}</div>
     <div class="rp-h">Synthèse par aéronef</div><div class="tablebox">${synthHTML()}</div>
-    <div class="rp-h">Synthèse par code ALAT</div><div class="tablebox">${codeHTML()}</div>
+    ${obsBox}
     <div class="sigwrap"><div class="sig">${SIGS.map(t=>`<div>${esc(t)}</div>`).join("")}</div></div>`;
 }
-$("#btnPreview").addEventListener("click",()=>{$("#synthBox").innerHTML=reportHTML();$("#synthDlg").showModal()});
+$("#btnPreview").addEventListener("click",()=>{$("#synthBox").innerHTML=reportHTML(false);$("#synthDlg").showModal()});
+$("#synthBox").addEventListener("input",e=>{if(e.target.id==="obsInput"){state.mission.obs=e.target.value;persist()}});
 
 /* ---------- PDF ---------- */
 const RGB={day:[23,32,38],vi:[30,122,74],night:[179,38,30]};
 const pdfTxt=s=>String(s??"").replace(/[–—]/g,"-").replace(/×/g,"x");
 const pH=x=>{x=r1(x);return x?x.toFixed(1):"-"};
 const pI=x=>x?String(Math.round(x)):"-";
-function buildPdf(height){
+function buildPdf(){
   const {jsPDF}=window.jspdf;
-  const doc=new jsPDF({unit:"mm",format:[297,height],orientation:height>297?"p":"l"});
-  const W=297,M=8;
+  const W=297,H=210,M=8;
+  const mk=()=>new jsPDF({unit:"mm",format:"a4",orientation:"l"});
+  const doc=mk();
   const name=state.mission.name||"Mission";
-  const fl=sorted();
-  doc.setFont("helvetica","bold");doc.setFontSize(22);
-  doc.text(doc.splitTextToSize(pdfTxt(name),W-2*M)[0],W/2,17,{align:"center"});
+  doc.setFont("helvetica","bold");doc.setFontSize(20);
+  doc.text(doc.splitTextToSize(pdfTxt(name),W-2*M)[0],W/2,15,{align:"center"});
   doc.setFont("helvetica","normal");doc.setFontSize(11);
-  doc.text(pdfTxt(missionDates()),W/2,24,{align:"center"});
+  doc.text(pdfTxt(missionDates()),W/2,21.5,{align:"center"});
+
+  // Cadre signatures fixe : 2 x 2 cases de 10 cm x 5 cm, en bas de page
+  const CW=100,CH=50,sx=(W-2*CW)/2,sy=H-M-2*CH;
+  const OBS_MIN=20, GAP=5, T0=31;
+  const maxTable=sy-GAP-OBS_MIN-GAP-T0;
+
   const s=synth();
-  const base={theme:"grid",margin:{left:M,right:M},styles:{fontSize:8,halign:"center",cellPadding:1.4,lineColor:[150,160,165],lineWidth:.15,textColor:[23,32,38]},
-    headStyles:{fillColor:[221,227,204],textColor:[23,32,38],fontStyle:"bold",halign:"center",valign:"middle"},pageBreak:"avoid",rowPageBreak:"avoid"};
-  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("Synthèse par aéronef",M,34);
   const sk=["l","l"].concat(SK);
-  doc.autoTable(Object.assign({},base,{startY:36,
+  const tableOpts=fs=>({theme:"grid",margin:{left:M,right:M},startY:T0,pageBreak:"avoid",rowPageBreak:"avoid",
+    styles:{fontSize:fs,halign:"center",cellPadding:Math.max(.5,fs*.175),lineColor:[150,160,165],lineWidth:.15,textColor:[23,32,38]},
+    headStyles:{fillColor:[221,227,204],textColor:[23,32,38],fontStyle:"bold",halign:"center",valign:"middle"},
     head:[[{content:"Aéronef",rowSpan:2},{content:"Immat.",rowSpan:2},{content:"MEP / Retour",colSpan:4},{content:"Zone",colSpan:4},{content:"VT",colSpan:1},{content:"Total",colSpan:5},{content:"Kéro (L)",rowSpan:2},{content:"Total H méca",rowSpan:2}],
       ["J","N","VI","SIL","J","N","VI","SIL","J","J","N","VI","SIL","Tot."]],
     body:s.rows.map(r=>[pdfTxt(r.aircraft),pdfTxt(r.immat)||"-"].concat(r.v.map((x,i)=>SK[i]==="int"?pI(x):pH(x))))
@@ -601,24 +620,32 @@ function buildPdf(height){
       if(d.section==="body"&&d.row.index===s.rows.length){d.cell.styles.fontStyle="bold";d.cell.styles.fillColor=[238,241,232]}
       const isSub=d.section==="head"&&d.row.index===1;
       if(d.section==="body"||isSub){const k=isSub?SK[d.column.index-2]:sk[d.column.index];if(RGB[k])d.cell.styles.textColor=RGB[k];if(k==="tot")d.cell.styles.fontStyle="bold"}
-    }}));
-  let y=doc.lastAutoTable.finalY+9;
-  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("Synthèse par code ALAT",M,y);
-  const sc=synthCode();
-  const fmtC=v=>v.map((x,i)=>CK[i]==="int"?pI(x):pH(x));
-  doc.autoTable(Object.assign({},base,{startY:y+2,
-    head:[["Code ALAT","Jour","VI CAG","VI CAM","Nuit","SIL","VTN","Total","H méca","ATT"]],
-    body:sc.rows.map(r=>[pdfTxt(r.code)||"Sans code"].concat(fmtC(r.v))).concat([["Total mission"].concat(fmtC(sc.total))]),
-    columnStyles:{0:{halign:"left",fontStyle:"bold"}},
-    didParseCell:d=>{
-      const k=CK[d.column.index-1];
-      if(d.section==="body"&&d.row.index===sc.rows.length){d.cell.styles.fontStyle="bold";d.cell.styles.fillColor=[238,241,232]}
-      if(RGB[k]&&(d.section==="body"||k!=="day"))d.cell.styles.textColor=RGB[k];
-      if(d.section==="body"&&k==="tot")d.cell.styles.fontStyle="bold";
-    }}));
-  // Cadre signatures : 2 x 2 cases de 10 cm x 5 cm
-  const CW=100,CH=50,sx=(W-2*CW)/2,sy=doc.lastAutoTable.finalY+12;
+    }});
+  // Mise à l'échelle : on réduit la police du tableau jusqu'à ce qu'il tienne
+  let fs=8;
+  for(;fs>4;fs-=.5){const t=mk();t.autoTable(tableOpts(fs));if(t.lastAutoTable.finalY-T0<=maxTable)break}
+  doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(23,32,38);doc.text("Synthèse par aéronef",M,T0-2);
+  doc.autoTable(tableOpts(fs));
+
+  // Case Observations : occupe l'espace entre le tableau et les signatures
+  const oy=Math.min(doc.lastAutoTable.finalY+GAP,sy-GAP-12), oh=sy-GAP-oy, ow=W-2*M;
   doc.setDrawColor(0);doc.setLineWidth(.35);doc.setTextColor(0);
+  doc.rect(M,oy,ow,oh);
+  doc.setFont("helvetica","bold");doc.setFontSize(8);doc.text("OBSERVATIONS",M+3,oy+4.5);
+  const txt=pdfTxt((state.mission.obs||"").trim());
+  if(txt){
+    doc.setFont("helvetica","normal");
+    let ofs=10,lines,lh;
+    for(;;ofs-=.5){
+      doc.setFontSize(ofs);lines=doc.splitTextToSize(txt,ow-6);lh=ofs*.3528*1.2;
+      if(lines.length*lh<=oh-8||ofs<=5.5)break;
+    }
+    const maxL=Math.max(1,Math.floor((oh-8)/lh));
+    if(lines.length>maxL){lines=lines.slice(0,maxL);lines[maxL-1]=lines[maxL-1].replace(/.{0,3}$/,"...")}
+    doc.text(lines,M+3,oy+8+lh*.75,{lineHeightFactor:1.2});
+  }
+
+  // Signatures
   doc.setFont("helvetica","bold");doc.setFontSize(8);
   SIGS.forEach((t,i)=>{
     const x=sx+(i%2)*CW,yy=sy+Math.floor(i/2)*CH;
@@ -626,16 +653,14 @@ function buildPdf(height){
     doc.text(t,x+CW/2,yy+4.5,{align:"center",maxWidth:CW-2});
   });
   doc.setTextColor(23,32,38);
-  return {doc,end:sy+2*CH};
+  return {doc,fs};
 }
 async function exportPdf(){
   if(!state.flights.length){toast("Aucun vol à imprimer.");return}
   const fname="Bilan_"+(state.mission.name||"mission").replace(/[^\wÀ-ÿ-]+/g,"_").slice(0,60)+"_"+today()+".pdf";
   if(window.jspdf&&window.jspdf.jsPDF){
     try{
-      const probe=buildPdf(4000);
-      const h=Math.max(210,Math.ceil(probe.end+10));
-      const {doc}=buildPdf(h);
+      const {doc}=buildPdf();
       const isIOS=/iP(ad|hone|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
       if(isIOS&&navigator.canShare){
         const file=new File([doc.output("blob")],fname,{type:"application/pdf"});
@@ -648,7 +673,7 @@ async function exportPdf(){
 }
 function printFallback(){
   const fl=sorted();
-  $("#printArea").innerHTML=reportHTML();
+  $("#printArea").innerHTML=reportHTML(true);
   try{window.print()}catch(e){toast("Impression indisponible ici.")}
 }
 $("#btnPrint").addEventListener("click",exportPdf);
@@ -671,7 +696,7 @@ $("#importFile").addEventListener("change",async e=>{
     const d=JSON.parse(await f.text());
     if(!d||!Array.isArray(d.flights))throw 0;
     if(!await ask(`Remplacer la mission actuelle par « ${d.mission&&d.mission.name||"sans nom"} » (${d.flights.length} vols) ?`,"Importer"))return;
-    state={mission:{name:(d.mission&&d.mission.name)||""},flights:d.flights,updatedAt:0};persist();renderAll();toast("Sauvegarde importée");
+    state={mission:{name:(d.mission&&d.mission.name)||"",obs:(d.mission&&d.mission.obs)||""},flights:d.flights,updatedAt:0};persist();renderAll();toast("Sauvegarde importée");
   }catch(err){toast("Fichier de sauvegarde invalide.")}
 });
 $("#btnReset").addEventListener("click",async()=>{
